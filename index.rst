@@ -69,9 +69,9 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``90b9cdd``)
+     - ``tickets/SP-3220`` (``7ee279f``)
    * - ``ts_fbs_utils``
-     - ``tickets/SP-3220`` (``6809416``)
+     - ``tickets/SP-3220`` (``87ffc87``)
    * - ``rubin_scheduler``
      - v4.6.0 or later
 
@@ -441,8 +441,8 @@ to the scheduler in the Conditions:
    * - Roman bulge
      - 86.5°
      - 12 (on season), 11 (off season)
-     - none
-     - none
+     - 2.0 (on season), 1.8 (off season)
+     - 2.0 (on season), 1.8 (off season)
    * - DDFs
      - 86.5°
      - 30
