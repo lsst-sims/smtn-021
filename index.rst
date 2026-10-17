@@ -79,7 +79,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``112afae``)
+     - ``tickets/SP-3220`` (``97f658c``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``a2b4420``)
    * - ``rubin_scheduler``
@@ -1763,18 +1763,20 @@ time a visit is requested, it checks the queued visits against the current
 conditions, using:
 
 * Each visit's flush time: visits past it are dropped.
-* A ``SlewtimeBasisFunction``, which masks visits the telescope can no longer
-  reach, such as those that have moved into the zenith exclusion region.
+* A ``SlewtimeBasisFunction`` (at the configuration's ``nside``), which masks
+  visits the telescope can no longer reach, such as those that have moved
+  into the zenith exclusion region.
 * The cloud check (``check_clouds=True``): visits are removed where the
   current cloud extinction is at or above the smallest ``extinction_limit``
   among the valid queued visits (:ref:`sec-clouds`). This is the only cloud
   veto in the queue manager; it has no cloud mask basis function of its own.
-  (``generate_qm`` still accepts a ``cloud_limit`` argument, which is no
-  longer used.)
 
 Visits that pass are returned in order, after a ``RotspUpdateDetailer``
 recalculates the sky rotation angle for any visit whose rotator angle would
-now be outside ±80° (``CAMERA_ROT_LIMITS``), or which has no sky rotation set.
+now be outside the configuration's ``camera_rot_limits`` (±80°), or which has
+no sky rotation set. ``get_scheduler`` passes ``camera_rot_limits`` and
+``nside`` to ``generate_qm``, so the queue manager uses the same values as the
+surveys.
 
 Global parameters
 -----------------
