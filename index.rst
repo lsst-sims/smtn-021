@@ -69,7 +69,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``7ee279f``)
+     - ``tickets/SP-3220`` (``4952cd5``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``b4fe5ce``)
    * - ``rubin_scheduler``
@@ -1063,7 +1063,7 @@ or 38 s in u, with one exposure per visit.
 The pre-computed array is stored in ``rubin_sim_data`` as
 ``scheduler/ts_ddf_array_<hash>.npz``, and the configuration loads it with
 ``read_ddf_obs_array``, checking that the hash in the file matches the
-expected hash (``f604ccd``). This is generated with the start date
+expected hash (``110273b``). This is generated with the start date
 ``SURVEY_START_MJD`` and the science program ``BLOCK-430`` by
 ``lsst_ddf_gen_block_430.py``. The hash and regeneration procedure are
 described in :ref:`sec-maintaining`.
