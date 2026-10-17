@@ -71,7 +71,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - ``ts_config_scheduler``
      - ``tickets/SP-3220`` (``4952cd5``)
    * - ``ts_fbs_utils``
-     - ``tickets/SP-3220`` (``b4fe5ce``)
+     - ``tickets/SP-3220`` (``a2b4420``)
    * - ``rubin_scheduler``
      - v4.6.0 or later
 
@@ -1370,21 +1370,284 @@ ignore DDF, near-sun twilight and ToO visits.
 Queue manager and CoreScheduler assembly
 ========================================
 
-To be written.
+``get_scheduler`` builds each tier in turn and then combines them into a
+``CoreScheduler``::
+
+   surveys = [toos, roman_micro, ddfs, template_surveys,
+              long_gaps, blobs, neo_micro, greedy]
+
+   scheduler = CoreScheduler(
+       surveys,
+       nside=nside,
+       survey_start_mjd=SURVEY_START_MJD,
+       band_to_filter=band_to_filter,
+       queue_manager=generate_qm(),
+   )
+
+It returns ``nside`` and ``scheduler``.
+
+How a visit is chosen
+---------------------
+
+When the Scheduler CSC asks for the next visit, the ``CoreScheduler`` takes
+it from its queue if there is a valid one. When the queue is empty (or all
+its visits are rejected), the ``CoreScheduler`` refills it:
+
+#. The tiers are checked in order, and the first tier with a finite reward
+   is used (:ref:`sec-introduction`). Within that tier, the survey with the
+   highest reward generates its observations; ties go to the survey listed
+   first.
+#. The survey's detailers adjust the observations (rotation, dithers, band
+   order, exposure time, labels and extinction limit).
+#. Any observation without a filter name is given one from
+   ``band_to_filter``.
+#. The observations are placed in the queue manager.
+
+The queue is also flushed when a new ToO alert arrives
+(``flush_for_new_too``, the default), so that ToO follow-up can start
+straight away.
+
+Queue manager
+-------------
+
+The queue manager is built by ``generate_qm`` in the configuration file. Each
+time a visit is requested, it checks the queued visits against the current
+conditions, using:
+
+* Each visit's flush time: visits past it are dropped.
+* A ``SlewtimeBasisFunction``, which masks visits the telescope can no longer
+  reach, such as those that have moved into the zenith exclusion region.
+* A ``MaskCloudMapBasisFunction`` with a 3.0 magnitude extinction limit.
+* The cloud check (``check_clouds=True``), using the smallest
+  ``extinction_limit`` among the queued visits (:ref:`sec-clouds`).
+
+Visits that pass are returned in order, after a ``RotspUpdateDetailer``
+recalculates the sky rotation angle for any visit whose rotator angle would
+now be outside ±80° (``CAMERA_ROT_LIMITS``), or which has no sky rotation set.
+
+Global parameters
+-----------------
+
+:numref:`tab-global` lists the parameters set at the top of
+``get_scheduler`` and used across the tiers.
+
+.. _tab-global:
+
+.. list-table:: Global parameters in ``fbs_config_lsst_survey.py``.
+   :header-rows: 1
+   :widths: 28 30 42
+
+   * - Parameter
+     - Value
+     - Used for
+   * - ``nside``
+     - 32
+     - HEALpix resolution of all maps (about 1.8°).
+   * - ``science_program``
+     - ``BLOCK-430``
+     - Science program recorded with every visit; must match the DDF array.
+   * - ``SURVEY_START_MJD``
+     - 61220.5 (2026-06-29T12:00)
+     - Footprint phase, template nights, DDF seasons (:ref:`sec-footprint`).
+   * - ``band_to_filter``
+     - u→``u_24``, g→``g_6``, r→``r_57``, i→``i_39``, z→``z_20``,
+       y→``y_10``
+     - Physical filter name for each band.
+   * - ``exptime``, ``u_exptime``
+     - 30 s, 38 s
+     - Exposure times for all surveys except some ToOs and the near-sun
+       twilight survey. All visits are a single exposure.
+   * - ``template_exptime``, ``u_template_exptime``
+     - 30 s, 38 s
+     - Template survey exposure times.
+   * - ``CAMERA_ROT_LIMITS``, ``camera_rot_limits``
+     - ±80°
+     - Rotator limits for the survey rotation detailers and the queue
+       manager.
+   * - ``standard_mask_params``
+     - :numref:`tab-mask-params`
+     - Standard masks for all surveys.
+   * - ``blob_max_alt``
+     - 76°
+     - Maximum altitude for template, long-gaps, pairs and greedy surveys.
+   * - ``pair_time``
+     - 33 minutes
+     - Pair spacing for the pairs and long-gaps surveys.
+   * - ``blob_survey_params``
+     - see below
+     - Timing for blob surveys.
+   * - ``fwhm_template_max_zenith``
+     - 1.2" in all bands
+     - Template seeing limit (:ref:`sec-tier-templates`).
+   * - ``too_extinction``, ``ddf_extinction``
+     - 3.0, 1.5 mag
+     - Cloud limits for the ToO and DDF tiers.
+   * - ``camera_ddf_rot_limit``, ``camera_ddf_rot_per_visit``
+     - 55°, 3°
+     - DDF and Roman rotation dithers.
+   * - ``max_dither``, ``per_night``
+     - 0.2°, False
+     - DDF and Roman translational dithers, applied per visit.
+   * - ``ei_night_pattern``, ``ei_bands``, ``ei_repeat``, ``ei_am``,
+       ``ei_elong_req``, ``ei_area_req``
+     - (True, False, False, False), riz, 4, 2.5, 45°, 0
+     - Near-sun twilight survey (:ref:`sec-tier-twilight`).
+
+The blob timing parameters (``blob_survey_params``) set how many fields a
+blob survey plans to observe in its time window: an approximate slew time
+of 8 s between fields, 200 s for a filter change, a readout of 3.07 s, and a
+flush time of 30 minutes after the expected end of the blob. With
+``twilight_scale`` the blob is shortened to end before twilight, and with
+``check_scheduled`` it is shortened to end before the next scheduled visit
+(such as a DDF sequence). The field tessellation uses a fixed random seed
+(42), and is rotated each night.
 
 .. _sec-running:
 
 Loading and running the configuration
 =====================================
 
-To be written.
+The configuration file is a Python module run by the Scheduler CSC's
+feature-based scheduler driver. The CSC runs the file as a module named
+``config``, which triggers::
+
+   if __name__ == "config":
+       nside, scheduler = get_scheduler()
+
+and then reads the module's ``nside`` and ``scheduler``. The unit tests in
+``ts_config_scheduler`` load every configuration in the same way.
+
+To use the configuration in a simulation, import the file and call
+``get_scheduler(for_simulation=True)``. The only difference is that the
+``ToO, SSO_night`` survey then counts its sequence from the current time
+rather than from the alert time (:ref:`sec-tier-too`).
+
+Scheduler CSC configuration
+---------------------------
+
+The MainTel Scheduler CSC configuration is in ``Scheduler/v10``. As for other
+CSCs, the configuration is built from ``_init.yaml``, then the site file
+(``_summit.yaml``, ``_base.yaml`` or ``_tucson.yaml``), then the selected
+configuration file. ``fbs_config_lsst_survey.yaml`` sets only:
+
+* ``driver_type: feature_scheduler`` and ``mode: ADVANCE``.
+* ``startup_type: COLD``, with ``startup_database`` and
+  ``observation_database_name`` set to
+  ``/home/saluser/rubin_sim_data/preops_lsst_fbs_observations.sql``. On a cold
+  start the scheduler is built from the configuration file and the previous
+  observations in this database are replayed into it, so that its footprint
+  and other features reflect the visits already taken.
+* ``scheduler_config``, the path to ``fbs_config_lsst_survey.py``.
+
+Everything else comes from ``_init.yaml`` and the site file. The values most
+relevant to the scheduler are:
+
+* The observatory model, which the CSC uses to estimate slew times and to set
+  the telescope limits seen by the scheduler: altitude 20°–84°, azimuth
+  ±200°, rotator ±60°, telescope speeds and accelerations of 2°/s and
+  2°/s², a 120 s filter change, 3 s readout, and 3 s settle time.
+* ``filter_band_mapping``, which maps the physical filter names reported by
+  the camera to bands (the inverse of ``band_to_filter``).
+* The telemetry streams that populate the Conditions
+  (:numref:`tab-telemetry`).
+
+.. _tab-telemetry:
+
+.. list-table:: Telemetry sources for the MainTel Scheduler CSC.
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - Quantity
+     - Source
+     - Notes
+   * - Seeing
+     - DIMM ``logevent_dimmMeasurement``, ``fwhm``
+     - Last 300 s; 1.0" used if no data.
+   * - Wind speed and direction
+     - ESS ``airFlow`` (index 301), ``speed`` and ``direction``
+     - Last 300 s; 0 used if no data. Used by the wind mask.
+   * - Cloud maps
+     - DREAM, via the LFA client
+     - Last 300 s. Used by all cloud masks and the queue manager.
+   * - ToO alerts
+     - SCiMMA ``lsst.scimma.too_alert``
+     - Last 8 days. Test alerts are ignored on the summit but not at the
+       base test stand.
+
+``fbs_config_lsst_survey_on_generator.yaml`` selects
+``fbs_config_lsst_survey_on_generator.py``, which is identical to the
+standard configuration except that ``apply_time_limited_shadow`` is True:
+during the last 3 hours before sunrise, all surveys are restricted to
+azimuths 150°–250°, so the dome can close quickly if needed while the
+observatory runs on generator power (:ref:`sec-masks`).
+
+.. TODO: the observatory model rotator limits are +/-60 deg, while the
+   configuration uses CAMERA_ROT_LIMITS of +/-80 deg. Confirm which applies.
 
 .. _sec-maintaining:
 
 Maintaining the configuration
 =============================
 
-To be written.
+Updating the DDF schedule
+-------------------------
+
+The DDF array must be regenerated whenever its inputs change: the sequence
+definitions in ``gen_ddf_presched_observations.py``, the scheduling code in
+``lsst_ddf_presched.py``, or the generating script itself
+(``lsst_ddf_gen_block_430.py``), which sets the science program and start
+date. To regenerate it:
+
+#. Run the generating script in an environment with ``rubin_scheduler`` and
+   ``ts_fbs_utils`` installed::
+
+      cd ts_config_scheduler/Scheduler/ddf_gen
+      python lsst_ddf_gen_block_430.py
+
+   The script prints the hash of its input files, and writes
+   ``ts_ddf_array_<hash>.npz`` to ``rubin_sim_data/scheduler``.
+#. Copy the hash into ``expected_hex_digest`` in both
+   ``fbs_config_lsst_survey.py`` and
+   ``fbs_config_lsst_survey_on_generator.py``.
+#. Make the new ``.npz`` file available in ``rubin_sim_data`` wherever the
+   configuration runs.
+
+The hash is calculated from the contents of the three input files and is also
+stored in the ``.npz`` file. When the configuration loads the array, it
+checks that a file with the expected hash exists and that the hash stored in
+it matches, and raises an error otherwise. It does not recompute the hash
+from the source files, so if the inputs change but the expected hash is not
+updated, the configuration will keep loading the old array.
+
+The survey start date is not one of the hash inputs: it is set separately in
+``lsst_footprints.SURVEY_START_MJD`` and in ``lsst_ddf_gen_block_430.py``
+(as MJD 61220.5). These must be kept the same by hand.
+
+Other changes
+-------------
+
+* **Science program.** A new science program needs updates in the
+  configuration (``science_program``), a new DDF generating script with the
+  new program name, and a regenerated DDF array.
+* **Template coverage.** The template footprint removes areas listed in the
+  template coverage maps in ``rubin_sim_data``
+  (``scheduler/template_maps``). Updating these maps changes where the
+  template surveys observe without any change to the configuration.
+* **Bands.** To remove a band from the survey, restrict ``bandpasses`` in the
+  call to ``get_footprints`` (:ref:`sec-footprint`).
+* **Generator power.** Changes to ``fbs_config_lsst_survey.py`` should also
+  be made in ``fbs_config_lsst_survey_on_generator.py``, which must stay
+  identical apart from ``apply_time_limited_shadow``.
+
+Testing
+-------
+
+``ts_config_scheduler`` includes a test that loads every configuration under
+``Scheduler/feature_scheduler`` and checks that it defines ``scheduler`` and
+``nside``. This needs ``rubin_scheduler``, ``ts_fbs_utils`` and the
+``rubin_sim_data`` files, including the DDF array. Changes to
+``ts_config_scheduler`` and ``ts_fbs_utils`` are recorded as news fragments
+in each package's ``doc/news`` directory.
 
 .. _sec-references:
 
