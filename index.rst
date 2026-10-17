@@ -69,7 +69,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``4952cd5``)
+     - ``tickets/SP-3220`` (``dbf7f1b``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``a2b4420``)
    * - ``rubin_scheduler``
@@ -1648,6 +1648,91 @@ Testing
 ``rubin_sim_data`` files, including the DDF array. Changes to
 ``ts_config_scheduler`` and ``ts_fbs_utils`` are recorded as news fragments
 in each package's ``doc/news`` directory.
+
+.. _sec-appendix-surveys:
+
+Appendix: Survey index
+======================
+
+:numref:`tab-survey-index` lists every survey in the configuration, with the
+name that begins its ``scheduler_note`` and the ``observation_reason``
+recorded with its visits. These can be used to identify which survey took a
+given visit in the observation database. There are 51 surveys in total.
+
+.. _tab-survey-index:
+
+.. list-table:: Surveys in the LSST configuration.
+   :header-rows: 1
+   :widths: 6 18 30 14 32
+
+   * - Tier
+     - Class
+     - Survey name(s)
+     - Count
+     - ``observation_reason``
+   * - 1
+     - ``ToOScriptedSurvey``
+     - ``ToO, GW_A``, ``ToO, GW_B_C``, ``ToO, GW_D_E``, ``ToO, GW_large``,
+       ``ToO, BBH``, ``ToO, LensedBNS_A``, ``ToO, LensedBNS_B``,
+       ``ToO, neutrino``, ``ToO, SSO_night``, ``ToO, SSO_twi``,
+       ``ToO, galactic SN``
+     - 11
+     - ``too_<name>_<alert id>_i<n>``, where ``<n>`` is the index of the
+       time in the follow-up sequence
+   * - 2
+     - ``FieldSurvey``
+     - ``DD: RGES_onseason``, ``DD: RGES_offseason``
+     - 2
+     - ``rges_onseason``, ``rges_offseason``
+   * - 3
+     - ``ScriptedSurvey``
+     - ``deep drilling`` (scheduler notes begin ``DD:<field>, <dayobs>``)
+     - 1
+     - ``ddf_<field>``, e.g. ``ddf_cosmos``, ``ddf_edfs_b``
+   * - 4
+     - ``BlobPairsSurvey``
+     - ``templates <b1><b2>`` for the pairs in :numref:`tab-templates`
+     - 18
+     - ``template_blob_<b1><b2>_25.0``
+   * - 5
+     - ``LongGapSurvey``
+     - ``blob_long, gr``, ``blob_long, ri``, ``blob_long, iz``
+     - 3
+     - ``triplet_pairs_<b1><b2>_33.0``
+   * - 6
+     - ``BlobSurvey``
+     - ``pair_33 <b1><b2>`` for ug, ur, gr, ri, rz, iz, zy
+     - 7
+     - ``pairs_<b1><b2>_33.0_40.0``
+   * - 7
+     - ``BlobSurvey``
+     - ``twilight_near_sun r``, ``twilight_near_sun i``,
+       ``twilight_near_sun z``
+     - 3
+     - ``twilight_near_sun``
+   * - 8
+     - ``GreedySurvey``
+     - ``greedy u`` … ``greedy y``
+     - 6
+     - ``singles_<band>``
+
+For the pairs-type surveys, the detailers append ``, a`` or ``, b`` to the
+scheduler note to mark the first and second visit of each pair. All visits
+carry the science program ``BLOCK-430``, and ``LabelRegionsAndDDFs`` adds
+the survey region label (:numref:`tab-regions`) and any DDF name to the
+target name.
+
+Acknowledgements
+================
+
+This material is based upon work supported in part by the National Science
+Foundation through Cooperative Agreements AST-1258333 and AST-2241526 and
+Cooperative Support Agreements AST-1202910 and AST-2211468 managed by the
+Association of Universities for Research in Astronomy (AURA), and the
+Department of Energy under Contract No. DE-AC02-76SF00515 with the SLAC
+National Accelerator Laboratory managed by Stanford University. Additional
+Rubin Observatory funding comes from private donations, grants to
+universities, and in-kind support from LSST-DA Institutional Members.
 
 .. _sec-references:
 
