@@ -79,7 +79,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``dbf7f1b``)
+     - ``tickets/SP-3220`` (``112afae``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``a2b4420``)
    * - ``rubin_scheduler``
@@ -417,15 +417,15 @@ to the scheduler in the Conditions:
   extinction is above that survey's ``extinction_limit`` (in magnitudes), so
   the survey will not choose those pointings.
 * An ``ExtinctionLimitDetailer`` writes the survey's ``extinction_limit``
-  into each observation it generates. When the queue manager checks the queue
-  (``check_clouds=True``), it masks pointings using the smallest
-  ``extinction_limit`` among the observations in the queue. This drops visits
-  that have become clouded since the queue was filled.
-* The queue manager also includes its own ``MaskCloudMapBasisFunction``, with
-  an extinction limit of 3.0 magnitudes (:ref:`sec-assembly`). This applies
-  to every queued observation and acts as an overall ceiling; it is set to the
-  largest per-survey limit so that it does not override the tighter limits
-  applied through ``check_clouds``.
+  into each observation it generates. Each time a visit is requested, the
+  queue manager's cloud check (``check_clouds=True``) takes the smallest
+  ``extinction_limit`` among the valid visits in its queue and removes any
+  queued visit whose pointing now has cloud extinction at or above that
+  limit (:ref:`sec-assembly`). This drops visits that have become clouded
+  since the queue was filled. Because the queue is filled by one survey at a
+  time, this is normally that survey's own limit. Visits from surveys without
+  an ``ExtinctionLimitDetailer`` (the greedy surveys) carry the default
+  limit of 100 magnitudes, so are never removed for clouds.
 * The ``M5DiffBasisFunction`` used by the pairs, long-gaps and greedy
   surveys includes cloud extinction in its estimate of the 5σ depth
   (``apply_clouds_m5``), so these surveys prefer clearer parts of the sky.
@@ -1765,9 +1765,12 @@ conditions, using:
 * Each visit's flush time: visits past it are dropped.
 * A ``SlewtimeBasisFunction``, which masks visits the telescope can no longer
   reach, such as those that have moved into the zenith exclusion region.
-* A ``MaskCloudMapBasisFunction`` with a 3.0 magnitude extinction limit.
-* The cloud check (``check_clouds=True``), using the smallest
-  ``extinction_limit`` among the queued visits (:ref:`sec-clouds`).
+* The cloud check (``check_clouds=True``): visits are removed where the
+  current cloud extinction is at or above the smallest ``extinction_limit``
+  among the valid queued visits (:ref:`sec-clouds`). This is the only cloud
+  veto in the queue manager; it has no cloud mask basis function of its own.
+  (``generate_qm`` still accepts a ``cloud_limit`` argument, which is no
+  longer used.)
 
 Visits that pass are returned in order, after a ``RotspUpdateDetailer``
 recalculates the sky rotation angle for any visit whose rotator angle would
@@ -1923,7 +1926,8 @@ relevant to the scheduler are:
      - Last 300 s; 0 used if no data. Used by the wind mask.
    * - Cloud maps
      - DREAM, via the LFA client
-     - Last 300 s. Used by all cloud masks and the queue manager.
+     - Last 300 s. Used by the survey cloud masks and the queue manager's
+       cloud check.
    * - ToO alerts
      - SCiMMA ``lsst.scimma.too_alert``
      - Last 8 days. Test alerts are ignored on the summit but not at the
