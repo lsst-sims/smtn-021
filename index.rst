@@ -71,7 +71,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - ``ts_config_scheduler``
      - ``tickets/SP-3220`` (``7ee279f``)
    * - ``ts_fbs_utils``
-     - ``tickets/SP-3220`` (``87ffc87``)
+     - ``tickets/SP-3220`` (``b4fe5ce``)
    * - ``rubin_scheduler``
      - v4.6.0 or later
 
@@ -735,7 +735,8 @@ seasons (:numref:`tab-roman`).
      - 1.8
 
 The Roman seasons are approximated in ``def_roman_info`` as 64-day windows
-centered on six mid-season dates (:numref:`tab-roman-seasons`). The
+centered on six mid-season dates (:numref:`tab-roman-seasons`). These are
+placeholders, to be updated as the Roman observing schedule is defined. The
 off-season windows run between consecutive on-season windows, so there are
 no Roman visits before the first on-season window starts.
 
@@ -758,9 +759,6 @@ no Roman visits before the first on-season window starts.
      - 2032-04-27 to 2032-06-30
    * - 63773.2
      - 2033-05-24 to 2033-07-27
-
-.. TODO: confirm Roman season dates; the code comment lists spring 2027,
-   fall 2027, spring 2028, fall 2030, spring 2031, fall 2031.
 
 Visits in each sequence are dithered by up to 0.2° in RA/Dec for each visit,
 and the camera rotation is offset by 3° per visit within ±55° (with a random
@@ -1057,11 +1055,10 @@ applies. Each visit remains in the script until its flush time
 (:numref:`tab-ddf-seq`) after the scheduled time. Exposure times are 30 s,
 or 38 s in u, with one exposure per visit.
 
-.. TODO: generate_ddf_scheduled_obs sets HA_min=21, HA_max=3 (intended as
-   +/-3 h). ScriptedSurvey accepts visits with HA > HA_max or HA < HA_min,
-   so these values exclude no hour angles; HA_min=3, HA_max=21 would give
-   +/-3 h. The EDFS_a visits also do not set moon_min_distance (EDFS_b do),
-   though the standard 30 deg Moon mask still applies.
+.. TODO: known bug, fix not yet decided. generate_ddf_scheduled_obs sets
+   HA_min=21, HA_max=3 (intended as +/-3 h). ScriptedSurvey accepts visits
+   with HA > HA_max or HA < HA_min, so these values exclude no hour angles.
+   Update this paragraph once resolved.
 
 The pre-computed array is stored in ``rubin_sim_data`` as
 ``scheduler/ts_ddf_array_<hash>.npz``, and the configuration loads it with
