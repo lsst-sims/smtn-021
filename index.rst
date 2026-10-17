@@ -81,7 +81,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - ``ts_config_scheduler``
      - ``tickets/SP-3220`` (``210a39f``)
    * - ``ts_fbs_utils``
-     - ``tickets/SP-3220`` (``a2b4420``)
+     - ``tickets/SP-3220`` (``cee0c57``)
    * - ``rubin_scheduler``
      - v4.6.0 or later
 
@@ -586,7 +586,7 @@ during commissioning and early operations :cite:`SMTN-020`:
 * **Very large regions.** For the gravitational-wave candidate S251112cm,
   parts of the region set before the survey returned to them in other bands.
   Now, when more visits are available than the survey can return at once
-  (``return_n_limit``: 500, or 100 for ``ToO, GW_large``),
+  (``return_n_limit``, 500 for all ToO surveys),
   ``ToOScriptedSurvey`` sorts them by band and, within each band, by hour
   angle from west to east, and returns only the first ``return_n_limit``
   (``sort_potential_result="HA"``, the default). Large regions are therefore
@@ -702,8 +702,6 @@ Some ToO surveys adjust the bands used:
 * For surveys which use z band (``ToO, BBH`` and ``ToO, neutrino``), a
   ``BandSubstituteDetailer`` replaces z with y if z is not mounted. For
   ``ToO, SSO_twi``, z is replaced with i.
-* ``ToO, GW_large`` returns at most 100 visits at a time, rather than the
-  default 500.
 * For ``ToO, SSO_night``, the sequence times are counted from the current
   time rather than the alert time when running in simulation
   (``for_simulation=True``).
