@@ -585,12 +585,12 @@ during commissioning and early operations :cite:`SMTN-020`:
   (``simple_single_tesselate``) rather than tiled.
 * **Very large regions.** For the gravitational-wave candidate S251112cm,
   parts of the region set before the survey returned to them in other bands.
-  Large regions are now observed in chunks of hour angle, from west to east,
-  so the parts of the region that will set first are covered first in all
-  their bands (``ChunkByHADetailer``, below). In addition, when more visits
-  are available than the survey can return at once (500, or 100 for
-  ``ToO, GW_large``), they are sorted by hour angle from west to east before
-  being cut.
+  Now, when more visits are available than the survey can return at once
+  (``return_n_limit``: 500, or 100 for ``ToO, GW_large``),
+  ``ToOScriptedSurvey`` sorts them by band and, within each band, by hour
+  angle from west to east, and returns only the first ``return_n_limit``
+  (``sort_potential_result="HA"``, the default). Large regions are therefore
+  covered in pieces, starting with the part that will set first.
 
 When a scheduled visit is available, it must also be at altitude 25°–85°,
 within ±5 hours of the meridian, and pass the masks. A ToO survey with
@@ -720,11 +720,6 @@ configuration:
 * A ``CameraRotDetailer``, which sets a random camera rotation within the
   ±80° rotator limits.
 * A ``BandSortDetailer``, to order visits by band and reduce filter changes.
-* A ``ChunkByHADetailer``, which drops visits below 25° altitude and splits
-  the rest into chunks of about 3 hours of hour angle. The chunks are
-  observed from west to east, and within each chunk the visits are ordered
-  by band (starting with the current band) and then spatially to keep slews
-  short. This replaces the order set by the ``BandSortDetailer``.
 * ``LabelRegionsAndDDFs``, which adds the survey region and any DDF name to
   the target name.
 * An ``ExtinctionLimitDetailer`` with a 3.0 magnitude limit for the queue
@@ -738,6 +733,10 @@ The ToO surveys have no basis functions other than masks
 scheduled visit is available and not masked. Each scheduled visit also
 carries its own time window, altitude and hour angle limits, which are
 checked separately from the basis functions.
+
+.. TODO: ts_config_scheduler 7090b61 still adds ChunkByHADetailer to the
+   ToO detailers; this text describes the intended configuration without it.
+   Update the reference commit once it is removed.
 
 .. _tab-too-bf:
 
