@@ -437,56 +437,46 @@ to the scheduler in the Conditions:
 
 .. _tab-tier-masks:
 
-.. list-table:: Mask settings for each tier. "Cloud mask" is the
-   ``MaskCloudMapBasisFunction`` limit in the survey; "Queue limit" is the
-   value set by the ``ExtinctionLimitDetailer``. Extinction limits are in
-   magnitudes.
+.. list-table:: Mask settings for each tier. ``extinction_limit`` is the
+   survey's ``MaskCloudMapBasisFunction`` and ``ExtinctionLimitDetailer``
+   limit, in magnitudes of cloud extinction.
    :header-rows: 1
 
    * - Tier
      - ``max_alt``
      - ``shadow_minutes``
-     - Cloud mask
-     - Queue limit
+     - ``extinction_limit``
    * - ToO
      - 86.5°
      - 2
-     - 3.0
      - 3.0
    * - Roman bulge
      - 86.5°
      - 12 (on season), 11 (off season)
      - 2.0 (on season), 1.8 (off season)
-     - 2.0 (on season), 1.8 (off season)
    * - DDFs
      - 86.5°
      - 30
-     - 1.5
      - 1.5
    * - Templates
      - 76°
      - 55
      - 1.0
-     - 1.0
    * - Long gaps
      - 76°
      - 71 (pairs), 33 (third visit)
-     - 2.0
      - 2.0
    * - Pairs (blobs)
      - 76°
      - 71
      - 2.0
-     - 2.0
    * - Near-sun twilight
      - 86.5°
      - 20
      - 3.0
-     - 3.0
    * - Greedy
      - 76°
      - 15
-     - none
      - none
 
 The greedy survey has no cloud mask, so that this fallback tier remains
