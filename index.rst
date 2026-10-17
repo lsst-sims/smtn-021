@@ -693,6 +693,29 @@ configuration:
 All ToO visits are single exposures, including the 120 s exposures for
 ``GW_case_A``.
 
+The ToO surveys have no basis functions other than masks
+(:numref:`tab-too-bf`); their reward is fixed at :math:`10^6` whenever a
+scheduled visit is available and not masked. Each scheduled visit also
+carries its own time window, altitude and hour angle limits, which are
+checked separately from the basis functions.
+
+.. _tab-too-bf:
+
+.. list-table:: Basis functions in the ToO surveys.
+   :header-rows: 1
+   :widths: 34 10 56
+
+   * - Basis function
+     - Weight
+     - Description
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - Moon, planets, wind, altitude/azimuth limits; 86.5° maximum
+       altitude, ``shadow_minutes`` 2.
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 3.0 magnitudes or more.
+
 .. _sec-tier-roman:
 
 Tier 2: Roman Galactic Bulge
@@ -759,6 +782,42 @@ no Roman visits before the first on-season window starts.
      - 2032-04-27 to 2032-06-30
    * - 63773.2
      - 2033-05-24 to 2033-07-27
+
+.. _tab-roman-bf:
+
+.. list-table:: Basis functions in the Roman surveys. ``FieldSurvey`` gives
+   all basis functions equal weight; all of these are masks or feasibility
+   checks, so the reward is 0 when the field is available and the survey is
+   infeasible otherwise.
+   :header-rows: 1
+   :widths: 34 16 50
+
+   * - Basis function
+     - Surveys
+     - Description
+   * - Standard masks (:numref:`tab-masks`)
+     - Both
+     - 86.5° maximum altitude; ``shadow_minutes`` 12 (on) or 11 (off).
+   * - ``MaskCloudMapBasisFunction``
+     - Both
+     - Mask the field if its cloud extinction is 2.0 (on) or 1.8 (off)
+       magnitudes or more.
+   * - ``HourAngleLimitBasisFunction``
+     - Both
+     - Feasible only when the field's hour angle is between −4 h and +4 h.
+   * - ``NotTwilightBasisFunction``
+     - Both
+     - Feasible only between evening and morning −18° twilight.
+   * - ``ForceDelayBasisFunction``
+     - Both
+     - Infeasible until 0.8 days (on) or 3 days (off) have passed since the
+       survey's last visit.
+   * - ``InTimeWindowBasisFunction``
+     - Both
+     - Feasible only within the on-season (on) or off-season (off) windows.
+   * - ``AirmassPointRangeBasisFunction``
+     - Off season
+     - Feasible only when the field's airmass is between 1.05 and 2.7.
 
 Visits in each sequence are dithered by up to 0.2° in RA/Dec for each visit,
 and the camera rotation is offset by 3° per visit within ±55° (with a random
@@ -1072,9 +1131,27 @@ Survey masks and detailers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When the scheduled visits are available, the ``deep drilling`` survey checks
-them against the standard masks, with the full 86.5° maximum altitude and
-``shadow_minutes`` of 30 minutes, and a cloud mask at 1.5 magnitudes of
-extinction. The survey does not require the time before twilight to be
+them against its basis functions (:numref:`tab-ddf-bf`). As for the ToOs,
+these are only masks, and the reward is fixed at :math:`10^6` when a
+scheduled visit is available.
+
+.. _tab-ddf-bf:
+
+.. list-table:: Basis functions in the DDF survey.
+   :header-rows: 1
+   :widths: 34 10 56
+
+   * - Basis function
+     - Weight
+     - Description
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 86.5° maximum altitude, ``shadow_minutes`` 30.
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 1.5 magnitudes or more.
+
+The survey does not require the time before twilight to be
 long enough for its visits (``before_twi_check=False``); instead a
 ``TruncatePreTwiDetailer`` drops visits that would run into morning twilight.
 The detailers, in order, are:
@@ -1123,22 +1200,32 @@ split equally between the two bands.
      - Purpose
    * - ``M5DiffBasisFunction``
      - 6.0
-     - Reward pointings where the current 5σ depth is close to the best
-       achievable depth (fiducial seeing 1.3"), including cloud extinction.
+     - The difference between the current 5σ depth at each pixel and the
+       best (dark-sky, 1.3" seeing) depth at that pixel, so pointings close
+       to their best possible depth are preferred. The current depth
+       includes cloud extinction (``apply_clouds_m5``).
    * - ``FootprintBasisFunction``
      - 1.5
-     - Reward pixels that are behind their desired number of visits in the
-       footprint; pixels outside the footprint are masked.
+     - How far each pixel is behind its desired number of visits in the
+       (rolling) footprint at the current time. Pixels outside the footprint
+       are masked. Optionally counts only visits with seeing better than a
+       limit (used by the template surveys).
    * - ``SlewtimeBasisFunction``
      - 3.0
-     - Reward pointings that are a short slew from the current position.
+     - Minus the slew time from the current pointing, divided by 135 s, so
+       short slews are preferred. Pixels the telescope cannot reach are
+       masked. If the survey's band is not the current band, this returns
+       only the mask, and the band change is handled by the next term.
    * - ``StrictBandBasisFunction``
      - 3.0
-     - Reward staying in the current band, unless the Moon has risen or set,
-       twilight has started or ended, or there has been a gap in observing.
+     - 1 if the survey's band is the current band, or if a band change is
+       reasonable now: the Moon has risen or set, or twilight (−18°) has
+       started or ended, since the last visit; more than 10 minutes have
+       passed since the last visit; or the last visit was a DDF visit.
+       Otherwise 0. Also 0 if the band is not mounted.
    * - ``BandLoadedBasisFunction``
      - 0
-     - Require the survey's bands to be mounted.
+     - Makes the survey infeasible unless its bands are mounted.
 
 Each survey adds its own basis functions, the standard masks and its cloud
 mask (:ref:`sec-masks`) to this list.
@@ -1150,24 +1237,84 @@ Each template survey is a ``BlobPairsSurvey``, generated by
 ``lsst_surveys.gen_template_surveys``. It covers a contiguous blob of sky
 twice, first in one band and then in a second (or the same) band, with the
 field tessellation rotated between the two passes and a target time of
-25 minutes per pass. In addition to the standard basis functions, each
-template survey:
+25 minutes per pass. The basis functions are listed in
+:numref:`tab-template-bf`.
 
-* Counts only visits with good seeing toward the footprint, and masks pixels
-  where the current seeing is worse than the template limit. The limit is
-  1.2" at zenith in all bands, scaled with declination
-  (``declination_dependent_fwhm``); for a pair of bands the smaller limit is
-  used.
-* Masks pixels which already have the required number of good-seeing visits
-  in the first band of the pair.
-* Masks pixels which have already been observed by the survey that night,
-  so template visits are spread over several nights.
-* Restricts the blob to within ±2.5 h of the meridian.
-* Only runs outside twilight, with at least 25 minutes before twilight.
-  Surveys which include u or g also require the Moon to be below −5°.
-* Requires at least 50 deg² of available sky within 90° of the reward peak.
-* Does not run if the median cloud extinction above the horizon exceeds 2.0
-  magnitudes, and masks pixels with more than 1.0 magnitude of extinction.
+The template seeing limit is 1.2" at zenith in all bands, scaled with
+declination (``declination_dependent_fwhm``) so that it matches the seeing
+achievable at the airmass where each declination transits. For a pair of
+bands the smaller of the two limits is used.
+
+.. _tab-template-bf:
+
+.. list-table:: Basis functions in the template surveys. Where a term is
+   split between the two bands of a pair, the weight is per band.
+   :header-rows: 1
+   :widths: 34 10 56
+
+   * - Basis function
+     - Weight
+     - Description
+   * - ``M5DiffBasisFunction`` (each band)
+     - 3.0
+     - Prefer pointings near their best depth (:numref:`tab-standard-bf`).
+   * - ``FootprintBasisFunction`` (each band)
+     - 0.75
+     - Prefer pixels behind in the template footprint, counting only visits
+       with seeing better than the template limit.
+   * - ``SlewtimeBasisFunction``
+     - 3.0
+     - Prefer short slews.
+   * - ``StrictBandBasisFunction``
+     - 3.0
+     - Prefer staying in the current band.
+   * - ``BandLoadedBasisFunction``
+     - 0
+     - Both bands must be mounted.
+   * - ``TimeToTwilightBasisFunction``
+     - 0
+     - Feasible only with at least 25 minutes before morning −18° twilight.
+   * - ``NotTwilightBasisFunction``
+     - 0
+     - Feasible only between evening and morning −18° twilight.
+   * - ``RevHaMaskBasisFunction``
+     - 0
+     - Mask pixels more than 2.5 h from the meridian.
+   * - ``NInNightMaskBasisFunction``
+     - 0
+     - Mask pixels already observed once that night (in any band), so
+       template visits are spread over several nights.
+   * - ``MoonAltLimitBasisFunction``
+     - 0
+     - Only when the first band is u or g: feasible only with the Moon below
+       −5° (with an extra ``NotTwilightBasisFunction``).
+   * - ``OnlyDuringNightsBasisFunction``
+     - 0
+     - Feasible only between the group's first and last night
+       (:numref:`tab-templates`).
+   * - ``MaskPoorSeeing``
+     - 0
+     - Mask pixels where the current seeing in the first band is worse than
+       the template limit.
+   * - ``MaskAfterNObsSeeingBasisFunction``
+     - 0
+     - Mask pixels which already have the required number of visits with
+       seeing better than the template limit in the first band.
+   * - ``CloudedOutMapBasisFunction``
+     - 0
+     - Infeasible if the median cloud extinction above the horizon is more
+       than 2.0 magnitudes.
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 76° maximum altitude, ``shadow_minutes`` 55.
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 1.0 magnitude or more.
+
+In addition, each blob needs at least 50 deg² of unmasked sky within 90° of
+the reward peak. In year 2, if this is not available, an extra
+``RevHaMaskBasisFunction`` restricting the map to ±1.25 h of the meridian is
+applied and a blob of 10 deg² is accepted instead.
 
 The template surveys use the 76° maximum altitude and a ``shadow_minutes``
 of 55 minutes. Their detailers set a random camera rotation within ±80°,
@@ -1234,6 +1381,63 @@ band pairs gr, ri and iz. Each combines:
   side of its scheduled time, at altitude 20°–80°, and is pushed later if it
   would fall in the zenith exclusion region.
 
+.. _tab-longgaps-bf:
+
+.. list-table:: Basis functions in the long-gaps surveys. The first group
+   applies to the ``BlobSurvey`` that takes the initial pair (weights are per
+   band where split); the last two rows also apply to the scripted third
+   visits, which have no other basis functions.
+   :header-rows: 1
+   :widths: 34 10 56
+
+   * - Basis function
+     - Weight
+     - Description
+   * - ``M5DiffBasisFunction`` (each band)
+     - 3.0
+     - Prefer pointings near their best depth (:numref:`tab-standard-bf`).
+   * - ``FootprintBasisFunction`` (each band)
+     - 0.75
+     - Prefer pixels behind in the rolling footprint.
+   * - ``SlewtimeBasisFunction``
+     - 3.0
+     - Prefer short slews.
+   * - ``StrictBandBasisFunction``
+     - 3.0
+     - Prefer staying in the current band.
+   * - ``BandLoadedBasisFunction``
+     - 0
+     - Both bands must be mounted.
+   * - ``TimeToScheduledBasisFunction``
+     - 0
+     - Feasible only with at least 15 minutes before the next scheduled
+       visit.
+   * - ``TimeToTwilightBasisFunction``
+     - 0
+     - Feasible only with at least 15 minutes before morning twilight.
+   * - ``NotTwilightBasisFunction``
+     - 0
+     - Feasible only between evening and morning −18° twilight.
+   * - ``AfterEveningTwiBasisFunction``
+     - 0
+     - Feasible only in the first 120 minutes after evening −18° twilight.
+   * - ``HaMaskBasisFunction``
+     - 0
+     - Mask pixels outside hour angles −12 h to −3.5 h (rising fields).
+   * - ``NightModuloBasisFunction``
+     - 0
+     - Feasible only on the second night of every four.
+   * - ``OnceInNightBasisFunction``
+     - 0
+     - Infeasible if any long-gaps blob has already been observed that night.
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 76° maximum altitude; ``shadow_minutes`` 71 (pairs) or 33 (third
+       visits).
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 2.0 magnitudes or more.
+
 The long-gaps surveys run only on the second night of every four
 (``night_pattern = (False, True, False, False)``), and only one long-gaps
 blob is taken per night. The initial pairs use ``shadow_minutes`` of
@@ -1256,35 +1460,64 @@ set from the timing parameters in ``blob_survey_params``
 next scheduled observation.
 
 There are seven pairs surveys, for the band pairs ug, ur, gr, ri, rz, iz and
-zy. In addition to the standard basis functions (:numref:`tab-standard-bf`),
-each pairs survey includes the terms in :numref:`tab-blobs`.
+zy. The basis functions are listed in :numref:`tab-blobs`.
 
 .. _tab-blobs:
 
-.. list-table:: Additional basis functions in the pairs surveys.
+.. list-table:: Basis functions in the pairs surveys. Where a term is split
+   between the two bands of a pair, the weight is per band.
    :header-rows: 1
+   :widths: 34 10 56
 
    * - Basis function
      - Weight
-     - Purpose
+     - Description
+   * - ``M5DiffBasisFunction`` (each band)
+     - 3.0
+     - Prefer pointings near their best depth (:numref:`tab-standard-bf`).
+   * - ``FootprintBasisFunction`` (each band)
+     - 0.75
+     - Prefer pixels behind in the rolling footprint.
+   * - ``SlewtimeBasisFunction``
+     - 3.0
+     - Prefer short slews.
+   * - ``StrictBandBasisFunction``
+     - 3.0
+     - Prefer staying in the current band.
+   * - ``BandLoadedBasisFunction``
+     - 0
+     - Both bands must be mounted.
    * - ``VisitRepeatBasisFunction``
      - −20
-     - Penalize fields already visited in the past 3 hours, so the survey
-       does not return to the same area too soon.
-   * - ``NGoodSeeingBasisFunction``
+     - 1 for pixels last visited (in any band) within the past 3 hours, so
+       the negative weight steers the survey away from areas it has just
+       covered. Pixels already with 20 or more pairs that night are not
+       counted.
+   * - ``NGoodSeeingBasisFunction`` (g, r, i only)
      - 3.0
-     - For g, r and i: reward pixels that have fewer than three visits per
-       season with seeing better than 0.8" and depth within 0.5 mag of the
-       dark-sky depth.
+     - 1 for footprint pixels which have fewer than three visits this season
+       with seeing better than 0.8", where the current seeing is better than
+       0.8" and the current depth is within 0.5 mag of the dark-sky depth.
+       Added for each band of the pair that is g, r or i.
    * - ``TimeToScheduledBasisFunction``
      - 0
-     - Require at least 15 minutes before the next scheduled observation.
+     - Feasible only with at least 15 minutes before the next scheduled
+       visit.
    * - ``TimeToTwilightBasisFunction``
      - 0
-     - Require at least 15 minutes before twilight.
+     - Feasible only with at least 15 minutes before morning twilight.
    * - ``NotTwilightBasisFunction``
      - 0
-     - Only run between evening and morning −18° twilight.
+     - Feasible only between evening and morning −18° twilight.
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 76° maximum altitude, ``shadow_minutes`` 71.
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 2.0 magnitudes or more.
+
+Unlike the template and greedy surveys, the pairs surveys do not restrict u
+and g to dark time.
 
 The pairs surveys use the 76° maximum altitude, ``shadow_minutes`` of
 71 minutes and a 2.0 magnitude cloud limit. Their detailers set a random
@@ -1309,8 +1542,9 @@ in twilight, toward the Sun:
   restricted to the LSST footprint mask.
 * Only pointings at airmass below 2.5, within 90° in azimuth of the Sun and
   within 45° solar elongation are allowed.
-* The surveys run only when the Sun is above −14.8° and within 25 minutes of
-  −12° twilight, so in the bright part of twilight.
+* The surveys run only in the bright part of twilight: in the evening while
+  the Sun is still above −14.8°, or in the morning within 25 minutes of −12°
+  twilight, as long as at least 15 minutes remain before it.
 * Each field is visited four times, with 15 s exposures, and the sequence is
   cut to fit in the remaining twilight.
 * The band for each night is picked at random from riz (falling back to
@@ -1320,8 +1554,56 @@ in twilight, toward the Sun:
   (``night_pattern = (True, False, False, False)``), so they do not run on
   the same nights as the long-gaps surveys.
 
-The reward combines a footprint term (weight 0.1), slew time (3.0), staying
-in band (3.0) and a term that rewards bands with fewer visits so far (0.3).
+The basis functions are listed in :numref:`tab-twilight-bf`.
+
+.. _tab-twilight-bf:
+
+.. list-table:: Basis functions in the near-sun twilight surveys.
+   :header-rows: 1
+   :widths: 34 10 56
+
+   * - Basis function
+     - Weight
+     - Description
+   * - ``FootprintBasisFunction``
+     - 0.1
+     - Prefer pixels behind in a constant (non-rolling) footprint covering
+       the ecliptic area above; pixels outside it are masked.
+   * - ``SlewtimeBasisFunction``
+     - 3.0
+     - Prefer short slews.
+   * - ``StrictBandBasisFunction``
+     - 3.0
+     - Prefer staying in the current band.
+   * - ``BandDistBasisFunction``
+     - 0.3
+     - The total number of visits divided by (one plus) the number in this
+       survey's band, so bands with fewer visits so far are preferred.
+   * - ``NearSunHighAirmassBasisFunction``
+     - 0
+     - Mask pixels with airmass of 2.5 or more, or more than 90° in azimuth
+       from the Sun.
+   * - ``BandLoadedBasisFunction``
+     - 0
+     - The band must be mounted.
+   * - ``SolarElongationMaskBasisFunction``
+     - 0
+     - Mask pixels more than 45° from the Sun.
+   * - ``NightModuloBasisFunction``
+     - 0
+     - Feasible only on the first night of every four.
+   * - ``CloseToTwilightBasisFunction``
+     - 0
+     - Feasible only in evening twilight with the Sun above −14.8°, or in the
+       last 25 minutes before morning −12° twilight (with at least 15 minutes
+       left).
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 86.5° maximum altitude, ``shadow_minutes`` 20.
+   * - ``MaskCloudMapBasisFunction``
+     - 0
+     - Mask pixels with cloud extinction of 3.0 magnitudes or more.
+
 The surveys use the full 86.5° maximum altitude, ``shadow_minutes`` of
 20 minutes and a 3.0 magnitude cloud limit. They ignore observations from
 all other surveys.
@@ -1340,21 +1622,43 @@ different weights (:numref:`tab-greedy`).
 
 .. _tab-greedy:
 
-.. list-table:: Basis function weights in the greedy surveys.
+.. list-table:: Basis functions in the greedy surveys.
    :header-rows: 1
+   :widths: 34 10 56
 
    * - Basis function
      - Weight
+     - Description
    * - ``M5DiffBasisFunction``
      - 3.0
+     - Prefer pointings near their best depth, including cloud extinction
+       (:numref:`tab-standard-bf`).
    * - ``FootprintBasisFunction``
      - 0.75
+     - Prefer pixels behind in the rolling footprint.
    * - ``SlewtimeBasisFunction``
      - 3.0
+     - Prefer short slews.
    * - ``StrictBandBasisFunction``
      - 100
-   * - ``VisitRepeatBasisFunction`` (visits in the past 2 hours)
+     - Prefer staying in the current band.
+   * - ``BandLoadedBasisFunction``
+     - 0
+     - The band must be mounted.
+   * - ``VisitRepeatBasisFunction``
      - −1.0
+     - 1 for pixels last visited within the past 2 hours (up to 20 pairs per
+       night), so the survey avoids repeating a pointing straight away.
+   * - ``NotTwilightBasisFunction``
+     - 0
+     - u and g only: feasible only between evening and morning −18°
+       twilight.
+   * - ``MoonAltLimitBasisFunction``
+     - 0
+     - u and g only: feasible only with the Moon below −5°.
+   * - Standard masks (:numref:`tab-masks`)
+     - 0
+     - 76° maximum altitude, ``shadow_minutes`` 15.
 
 The large weight on staying in band means the greedy surveys almost never
 change filter. The u and g surveys only run outside twilight with the Moon
