@@ -69,7 +69,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``7bd2e8c``)
+     - ``tickets/SP-3220`` (``90b9cdd``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``6809416``)
    * - ``rubin_scheduler``
@@ -382,7 +382,7 @@ Survey-specific mask settings
 Two settings are changed by individual tiers.
 
 The maximum altitude is lowered from 86.5° to ``blob_max_alt = 76°`` for the
-template, pairs and greedy surveys. These surveys move across the sky, and
+template, long-gaps, pairs and greedy surveys. These surveys move across the sky, and
 pointings near zenith lead to long slews when they cross the meridian.
 
 The ``shadow_minutes`` value is raised by each survey generator to the time
@@ -407,8 +407,10 @@ to the scheduler in the Conditions:
   ``extinction_limit`` among the observations in the queue. This drops visits
   that have become clouded since the queue was filled.
 * The queue manager also includes its own ``MaskCloudMapBasisFunction``, with
-  an extinction limit of 1.5 magnitudes (:ref:`sec-assembly`). This applies
-  to every queued observation, whatever its survey's limit.
+  an extinction limit of 3.0 magnitudes (:ref:`sec-assembly`). This applies
+  to every queued observation and acts as an overall ceiling; it is set to the
+  largest per-survey limit so that it does not override the tighter limits
+  applied through ``check_clouds``.
 * The ``M5DiffBasisFunction`` used by the pairs, long-gaps and greedy
   surveys includes cloud extinction in its estimate of the 5σ depth
   (``apply_clouds_m5``), so these surveys prefer clearer parts of the sky.
@@ -445,14 +447,14 @@ to the scheduler in the Conditions:
      - 86.5°
      - 30
      - 1.5
-     - 3.0
+     - 1.5
    * - Templates
      - 76°
      - 55
      - 1.0
      - 1.0
    * - Long gaps
-     - 86.5°
+     - 76°
      - 71 (pairs), 33 (third visit)
      - 2.0
      - 2.0
