@@ -41,8 +41,8 @@ The LSST configuration is spread across three packages:
 
 ``rubin_scheduler``
    The scheduling framework: the ``CoreScheduler``, the survey classes, basis
-   functions, detailers and footprint utilities. See the
-   `rubin_scheduler documentation <https://rubin-scheduler.lsst.io>`_.
+   functions, detailers and footprint utilities :cite:`rubin_scheduler`. See
+   the `rubin_scheduler documentation <https://rubin-scheduler.lsst.io>`_.
 
 ``ts_fbs_utils``
    Functions which build the individual surveys and footprints used at the
@@ -55,6 +55,16 @@ The LSST configuration is spread across three packages:
    sets the survey-level parameters and calls the ``ts_fbs_utils`` functions.
    The Scheduler CSC configuration (yaml) files that point to this
    configuration are in ``Scheduler/v10``.
+
+SMTN-020 :cite:`SMTN-020` describes the FBS framework itself (the survey
+classes, masks and operational cycle), the simulations used to develop the
+survey strategy, and the use of the FBS during commissioning and the Science
+Validation (SV) survey with LSSTCam. Several features of the configuration
+described here were added in response to lessons from that period; these are
+noted in the relevant sections. The survey strategy that this configuration
+implements follows the recommendations of the Survey Cadence Optimization
+Committee :cite:`PSTN-053,PSTN-055,PSTN-056` and is summarized at
+https://survey-strategy.lsst.io :cite:`SurveyStrategy`.
 
 This note describes the configuration at the versions listed in
 :numref:`tab-versions`. Where a value is set in the configuration file, that
@@ -317,10 +327,13 @@ Standard masks
    * - Basis function
      - Purpose
    * - ``MoonAvoidanceBasisFunction``
-     - Avoid pointings within ``moon_distance`` (30°) of the Moon, which can
-       trip the camera electronics.
+     - Avoid pointings within ``moon_distance`` (30°) of the Moon. Observing
+       closer to the Moon risks tripping the LSSTCam HVBias, which takes over
+       30 minutes to reset :cite:`SMTN-020`.
    * - ``PlanetMaskBasisFunction``
-     - Avoid bright planets.
+     - Avoid pointings within 3.5° of Venus, Mars and Jupiter. These are
+       bright and move quickly enough that it is better to avoid them than to
+       observe through them :cite:`SMTN-020`.
    * - ``MaskDirectWindBasisFunction``
      - Avoid pointing into the wind when the wind speed exceeds
        ``wind_speed_maximum``.
@@ -332,6 +345,8 @@ Standard masks
      - Optional (``apply_time_limited_shadow``): during the last
        ``time_to_sunrise`` hours of the night, restrict the azimuth to
        ``min_az_sunrise`` to ``max_az_sunrise``, pointing away from sunrise.
+       This was used throughout commissioning, in case dome closure was
+       delayed :cite:`SMTN-020`; it is now used only on generator power.
    * - ``SunAltLimitBasisFunction``
      - Optional (``sun_alt_limit``): only observe while the Sun is below a
        given altitude.
@@ -556,6 +571,24 @@ the survey generates a script of follow-up visits:
   listed bands, with the given number of visits per band and exposure time.
   Each visit can be observed from one hour before its scheduled time until
   the flush time after it.
+
+Most of the follow-up strategies are based on Andreoni et al.
+:cite:`Andreoni2022`. Two features of the follow-up came from experience
+during commissioning and early operations :cite:`SMTN-020`:
+
+* **Well-localized events.** For the interstellar comet 3I/ATLAS, the FBS
+  covered the surrounding ``nside=32`` HEALpixels as well as the object's
+  position, which was inefficient. Well-localized events can now be
+  identified as such in the alert information, so the FBS points at the
+  event itself; in ``ToOScriptedSurvey``, an alert region that maps to a
+  single HEALpix is observed with one pointing at that position
+  (``simple_single_tesselate``) rather than tiled.
+* **Very large regions.** For the gravitational-wave candidate S251112cm,
+  parts of the region set before the survey returned to them in other bands.
+  Now, when more visits are available than the survey can return at once
+  (500, or 100 for ``ToO, GW_large``), they are sorted by hour angle from
+  west to east before being cut, so the parts of the region that will set
+  first are observed first.
 
 When a scheduled visit is available, it must also be at altitude 25°–85°,
 within ±5 hours of the meridian, and pass the masks. A ToO survey with
@@ -834,7 +867,10 @@ Tier 3: Deep Drilling Fields
 
 The Deep Drilling Fields (DDFs) are observed by a single ``ScriptedSurvey``,
 ``deep drilling``, whose script is a pre-computed array of DDF visits for the
-whole ten-year survey. Pre-computing the schedule lets each sequence be placed
+whole ten-year survey. The DDF program is described in the SCOC
+recommendations :cite:`PSTN-053,PSTN-055,PSTN-056` and at
+https://survey-strategy.lsst.io :cite:`SurveyStrategy`. Pre-computing the
+schedule lets each sequence be placed
 at the best time in the night, and on nights spread evenly through each
 field's observing season, which a reactive survey cannot easily do.
 
@@ -1160,7 +1196,11 @@ The detailers, in order, are:
    3° per visit within ±55°, with a random offset at each band change.
 #. ``SplitDetailer``: for EDFS, a ``EuclidDitherDetailer`` dithers along and
    perpendicular to the line joining the two EDFS pointings; for the other
-   fields, a ``DitherDetailer`` dithers each visit by up to 0.2°.
+   fields, a ``DitherDetailer`` dithers each visit by up to 0.2°. Dithers are
+   applied to every visit (``per_night=False``). The original sequences
+   dithered only from night to night, but during the SV survey the
+   resulting images could not be combined well into coadds without
+   intra-night dithers to cover the chip gaps :cite:`SMTN-020`.
 #. ``BandNexp``: u-band visits use a single 38 s exposure.
 #. ``BandSortDetailer``: order visits by band.
 #. ``LabelRegionsAndDDFs``.
@@ -1176,7 +1216,11 @@ Tier 4: Templates
 -----------------
 
 Difference imaging needs template images in every band over the whole
-footprint. The template surveys acquire these early in the survey, using
+footprint. The template tier was added after the SV survey showed that
+building template coadds from the standard LSST tessellation needs more input
+images than expected, with tighter limits on image quality and cloud
+extinction :cite:`SMTN-020`. The template surveys acquire these early in the
+survey, using
 the template footprint (:ref:`sec-footprint`), which is flat over the survey
 footprint and excludes areas that already have templates.
 
@@ -1811,8 +1855,11 @@ flush time of 30 minutes after the expected end of the blob. With
 Loading and running the configuration
 =====================================
 
-The configuration file is a Python module run by the Scheduler CSC's
-feature-based scheduler driver. The CSC runs the file as a module named
+At the summit, the FBS runs inside the Scheduler CSC
+(https://ts-scheduler.lsst.io), which gathers telemetry, passes it to the
+FBS, sends the requested visits to the observatory and reports completed
+visits back to the FBS :cite:`SMTN-020`. The configuration file is a Python
+module run by the Scheduler CSC's feature-based scheduler driver. The CSC runs the file as a module named
 ``config``, which triggers::
 
    if __name__ == "config":
@@ -1822,7 +1869,11 @@ and then reads the module's ``nside`` and ``scheduler``. The unit tests in
 ``ts_config_scheduler`` load every configuration in the same way.
 
 To use the configuration in a simulation, import the file and call
-``get_scheduler(for_simulation=True)``. The only difference is that the
+``get_scheduler(for_simulation=True)``. Simulations use the same
+``rubin_scheduler`` code with modelled telemetry and observatory behavior in
+place of the summit; the models, and how well they matched on-sky
+performance during the SV survey, are described in SMTN-020
+:cite:`SMTN-020`. The only difference is that the
 ``ToO, SSO_night`` survey then counts its sequence from the current time
 rather than from the alert time (:ref:`sec-tier-too`).
 
@@ -1942,6 +1993,19 @@ Other changes
 * **Generator power.** Changes to ``fbs_config_lsst_survey.py`` should also
   be made in ``fbs_config_lsst_survey_on_generator.py``, which must stay
   identical apart from ``apply_time_limited_shadow``.
+
+Configuration records
+---------------------
+
+The Scheduler CSC records which configuration was in use at any time: the git
+hash of the deployed ``ts_config_scheduler``, and the versions of
+``ts_fbs_utils`` and ``rubin_scheduler``, are written to the Engineering
+Facilities Database (EFD), together with the CSC's lists of upcoming
+(``targets``) and completed (``observations``) visits. For each request the
+CSC also saves a snapshot of the Conditions and of the scheduler after
+ingesting them, so that the scheduler's state and decisions can be
+reproduced when investigating unexpected behavior. Examples of issues found
+this way during commissioning are given in SMTN-020 :cite:`SMTN-020`.
 
 Testing
 -------
