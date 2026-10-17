@@ -79,7 +79,7 @@ value is quoted; otherwise the default in ``ts_fbs_utils`` or
    * - Package
      - Version
    * - ``ts_config_scheduler``
-     - ``tickets/SP-3220`` (``7090b61``)
+     - ``tickets/SP-3220`` (``210a39f``)
    * - ``ts_fbs_utils``
      - ``tickets/SP-3220`` (``a2b4420``)
    * - ``rubin_scheduler``
@@ -733,10 +733,6 @@ The ToO surveys have no basis functions other than masks
 scheduled visit is available and not masked. Each scheduled visit also
 carries its own time window, altitude and hour angle limits, which are
 checked separately from the basis functions.
-
-.. TODO: ts_config_scheduler 7090b61 still adds ChunkByHADetailer to the
-   ToO detailers; this text describes the intended configuration without it.
-   Update the reference commit once it is removed.
 
 .. _tab-too-bf:
 
